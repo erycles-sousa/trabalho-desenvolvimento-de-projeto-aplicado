@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Button } from './ui/button';
@@ -9,6 +9,7 @@ import { Badge } from './ui/badge';
 import { MessageSquare, Home, Hospital, Pill, Activity, AlertCircle, Plus, Clock } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
+import { supabase } from '../supabaseClient';
 
 interface PatientReport {
   id: string;
@@ -79,16 +80,21 @@ export function EnfermeiroScreen() {
     }
   ]);
 
-  const [prescriptions, setPrescriptions] = useState<NursePrescription[]>([
-    {
-      id: '1',
-      date: '2025-11-05',
-      medication: 'Dipirona',
-      dosage: '500mg',
-      duration: '5 dias',
-      reason: 'Controle de dor leve'
-    }
-  ]);
+  const [prescriptions, setPrescriptions] = useState<NursePrescription[]>([]);
+
+  useEffect(() => {
+    fetchPrescriptions();
+  }, []);
+
+  const fetchPrescriptions = async () => {
+    const { data, error } = await supabase
+      .from('nurse_prescriptions')
+      .select('*')
+      .order('id', { ascending: false });
+    
+    if (error) console.log('Erro ao buscar:', error);
+    if (data) setPrescriptions(data);
+  };
 
   const [newGuidance, setNewGuidance] = useState<Partial<Guidance>>({
     reportId: '',
@@ -131,19 +137,33 @@ export function EnfermeiroScreen() {
     }
   };
 
-  const addPrescription = () => {
+  const addPrescription = async () => {
     if (newPrescription.medication && newPrescription.dosage) {
-      setPrescriptions([...prescriptions, {
-        id: Date.now().toString(),
-        date: new Date().toISOString().split('T')[0],
-        ...newPrescription
-      }]);
-      setNewPrescription({
-        medication: '',
-        dosage: '',
-        duration: '',
-        reason: ''
-      });
+      const { error } = await supabase
+        .from('nurse_prescriptions')
+        .insert([
+          {
+            date: new Date().toISOString().split('T')[0],
+            medication: newPrescription.medication || '',
+            dosage: newPrescription.dosage || '',
+            duration: newPrescription.duration || '',
+            reason: newPrescription.reason || ''
+          }
+        ]);
+
+      if (error) {
+        alert('Erro ao salvar!');
+        console.log(error);
+      } else {
+        fetchPrescriptions();
+        setNewPrescription({
+          medication: '',
+          dosage: '',
+          duration: '',
+          reason: ''
+        });
+        alert('Prescrição adicionada com sucesso!');
+      }
     }
   };
 

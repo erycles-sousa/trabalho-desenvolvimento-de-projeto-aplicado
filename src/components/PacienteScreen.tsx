@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Button } from './ui/button';
@@ -10,6 +10,7 @@ import { Calendar as CalendarIcon, Pill, AlertCircle, Clock, Bell, CheckCircle2,
 import { Calendar } from './ui/calendar';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
+import { supabase } from '../supabaseClient';
 
 interface Medication {
   id: string;
@@ -38,22 +39,59 @@ interface Procedure {
 }
 
 export function PacienteScreen() {
+  const hoje = new Date();
+  const amanha = new Date(hoje); amanha.setDate(hoje.getDate() + 1);
+  const daqui3dias = new Date(hoje); daqui3dias.setDate(hoje.getDate() + 3);
+  const daqui8dias = new Date(hoje); daqui8dias.setDate(hoje.getDate() + 8);
+  const daqui15dias = new Date(hoje); daqui15dias.setDate(hoje.getDate() + 15);
+
+  const formatData = (data: Date) => data.toISOString().split('T')[0];
+
   const [medications, setMedications] = useState<Medication[]>([
-    { id: '1', name: 'Ondansetrona', dosage: '8mg', time: '08:00', taken: true, date: '2025-11-07' },
-    { id: '2', name: 'Ondansetrona', dosage: '8mg', time: '16:00', taken: false, date: '2025-11-07' },
-    { id: '3', name: 'Dexametasona', dosage: '4mg', time: '08:00', taken: true, date: '2025-11-07' },
-    { id: '4', name: 'Dexametasona', dosage: '4mg', time: '20:00', taken: false, date: '2025-11-07' },
+    { id: '1', name: 'Ondansetrona', dosage: '8mg', time: '08:00', taken: true, date: formatData(hoje) },
+    { id: '2', name: 'Ondansetrona', dosage: '8mg', time: '16:00', taken: false, date: formatData(hoje) },
+    { id: '3', name: 'Dexametasona', dosage: '4mg', time: '08:00', taken: true, date: formatData(hoje) },
+    { id: '4', name: 'Dexametasona', dosage: '4mg', time: '20:00', taken: false, date: formatData(hoje) },
   ]);
 
-  const [sideEffects, setSideEffects] = useState<SideEffect[]>([
-    { id: '1', date: '2025-11-06', medication: 'Quimioterapia', effect: 'Náusea leve', severity: 'leve', location: 'domiciliar' },
-    { id: '2', date: '2025-11-05', medication: 'Ondansetrona', effect: 'Dor de cabeça', severity: 'moderado', location: 'domiciliar' },
-  ]);
+  const [sideEffects, setSideEffects] = useState<SideEffect[]>([]);
+
+  useEffect(() => {
+    fetchSideEffects();
+  }, []);
+
+  const fetchSideEffects = async () => {
+    const { data, error } = await supabase
+      .from('side_effects')
+      .select('*')
+      .order('id', { ascending: false });
+    
+    if (error) console.log('Erro ao buscar:', error);
+    if (data) setSideEffects(data);
+  };
 
   const [procedures, setProcedures] = useState<Procedure[]>([
-    { id: '1', date: '2025-11-10', name: 'Tomografia de Tórax', preparation: 'Jejum de 4 horas. Não suspender medicações de uso contínuo.', daysUntil: 3 },
-    { id: '2', date: '2025-11-15', name: 'Consulta Oncologista', preparation: 'Levar exames anteriores e lista de medicamentos.', daysUntil: 8 },
-    { id: '3', date: '2025-11-20', name: 'Sessão de Quimioterapia', preparation: 'Alimentação leve. Hidratação adequada. Chegar 30 min antes.', daysUntil: 13 },
+    { 
+      id: '1', 
+      date: formatData(daqui3dias), 
+      name: 'Tomografia de Tórax', 
+      preparation: 'Jejum de 4 horas. Não suspender medicações de uso contínuo.', 
+      daysUntil: 3 
+    },
+    { 
+      id: '2', 
+      date: formatData(daqui8dias), 
+      name: 'Consulta Oncologista', 
+      preparation: 'Levar exames anteriores e lista de medicamentos.', 
+      daysUntil: 8 
+    },
+    { 
+      id: '3', 
+      date: formatData(daqui15dias), 
+      name: 'Sessão de Quimioterapia', 
+      preparation: 'Alimentação leve. Hidratação adequada. Chegar 30 min antes.', 
+      daysUntil: 15 
+    },
   ]);
 
   const [newSideEffect, setNewSideEffect] = useState<Partial<SideEffect>>({
@@ -71,22 +109,33 @@ export function PacienteScreen() {
     ));
   };
 
-  const addSideEffect = () => {
+  const addSideEffect = async () => {
     if (newSideEffect.medication && newSideEffect.effect) {
-      setSideEffects([...sideEffects, {
-        id: Date.now().toString(),
-        date: new Date().toISOString().split('T')[0],
-        medication: newSideEffect.medication || '',
-        effect: newSideEffect.effect || '',
-        severity: newSideEffect.severity || 'leve',
-        location: newSideEffect.location || 'domiciliar'
-      }]);
-      setNewSideEffect({
-        medication: '',
-        effect: '',
-        severity: 'leve',
-        location: 'domiciliar'
-      });
+      const { error } = await supabase
+        .from('side_effects')
+        .insert([
+          {
+            date: new Date().toISOString().split('T')[0],
+            medication: newSideEffect.medication || '',
+            effect: newSideEffect.effect || '',
+            severity: newSideEffect.severity || 'leve',
+            location: newSideEffect.location || 'domiciliar'
+          }
+        ]);
+
+      if (error) {
+        alert('Erro ao salvar!');
+        console.log(error);
+      } else {
+        fetchSideEffects();
+        setNewSideEffect({
+          medication: '',
+          effect: '',
+          severity: 'leve',
+          location: 'domiciliar'
+        });
+        alert('Efeito colateral registrado!');
+      }
     }
   };
 

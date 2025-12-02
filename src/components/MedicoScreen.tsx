@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Button } from './ui/button';
@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Badge } from './ui/badge';
 import { Calendar, FileText, Pill, Activity, Plus, Clock } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
+import { supabase } from '../supabaseClient';
 
 interface TreatmentRecord {
   id: string;
@@ -35,58 +36,120 @@ interface Prescription {
 }
 
 export function MedicoScreen() {
-  const [treatments, setTreatments] = useState<TreatmentRecord[]>([
-    { id: '1', date: '2025-11-01', phase: 'Quimioterapia', description: 'Sessão 1 - Protocolo AC', status: 'Em andamento' },
-    { id: '2', date: '2025-10-15', phase: 'Radioterapia', description: 'Planejamento inicial', status: 'Concluído' },
-    { id: '3', date: '2025-11-08', phase: 'Hormonioterapia', description: 'Sessão 2 - Protocolo AD', status: 'Em andamento' },
-  ]);
+  useEffect(() => {
+    fetchTreatments();
+    fetchExams();
+    fetchPrescriptions();
+  }, []);
 
-  const [exams, setExams] = useState<Exam[]>([
-    { id: '1', date: '2025-11-05', type: 'Hemograma completo', status: 'realizado', results: 'Valores dentro da normalidade' },
-    { id: '2', date: '2025-11-10', type: 'Tomografia', status: 'solicitado' },
-  ]);
+  const [treatments, setTreatments] = useState<TreatmentRecord[]>([]);
 
-  const [prescriptions, setPrescriptions] = useState<Prescription[]>([
-    { id: '1', date: '2025-11-01', medication: 'Ondansetrona', dosage: '8mg', frequency: '8/8h' },
-    { id: '2', date: '2025-11-01', medication: 'Dexametasona', dosage: '4mg', frequency: '12/12h' },
-  ]);
+  const [exams, setExams] = useState<Exam[]>([]);
+  
+  const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
+
+  const fetchTreatments = async () => {
+    const { data, error } = await supabase
+      .from('treatments')
+      .select('*')
+      .order('id', { ascending: false });
+    
+    if (error) console.log('Erro ao buscar tratamentos:', error);
+    if (data) setTreatments(data);
+  };
+
+  const fetchExams = async () => {
+    const { data, error } = await supabase
+      .from('exams')
+      .select('*')
+      .order('id', { ascending: false });
+
+    if (error) console.log('Erro ao buscar:', error);
+    if (data) setExams(data);
+  };
+
+  const fetchPrescriptions = async () => {
+    const { data, error } = await supabase
+      .from('prescriptions')
+      .select('*')
+      .order('id', { ascending: false });
+    
+    if (error) console.log('Erro ao buscar prescrições:', error);
+    if (data) setPrescriptions(data);
+  };
 
   const [newTreatment, setNewTreatment] = useState({ phase: '', description: '', status: '' });
   const [newExam, setNewExam] = useState<Partial<Exam>>({ type: '', status: 'solicitado' });
   const [newPrescription, setNewPrescription] = useState({ medication: '', dosage: '', frequency: '' });
 
-  const addTreatment = () => {
+  const addTreatment = async () => {
     if (newTreatment.phase && newTreatment.description) {
-      setTreatments([...treatments, {
-        id: Date.now().toString(),
-        date: new Date().toISOString().split('T')[0],
-        ...newTreatment
-      }]);
-      setNewTreatment({ phase: '', description: '', status: '' });
+      const { error } = await supabase
+        .from('treatments')
+        .insert([
+          {
+            date: new Date().toISOString().split('T')[0],
+            phase: newTreatment.phase || '',
+            description: newTreatment.description || '',
+            status: newTreatment.status || 'Planejado'
+          }
+        ]);
+
+      if (error) {
+        alert('Erro ao salvar tratamento!');
+        console.log(error);
+      } else {
+        fetchTreatments(); // Atualiza a lista na hora
+        setNewTreatment({ phase: '', description: '', status: '' });
+        alert('Tratamento registrado com sucesso!');
+      }
     }
   };
-
-  const addExam = () => {
+// segundo bloco de alteração
+  const addExam = async () => {
     if (newExam.type) {
-      setExams([...exams, {
-        id: Date.now().toString(),
-        date: new Date().toISOString().split('T')[0],
-        type: newExam.type || '',
-        status: newExam.status || 'solicitado',
-        results: newExam.results || ''
-      }]);
-      setNewExam({ type: '', status: 'solicitado' });
-    }
-  };
+      const { error } = await supabase
+        .from('exams')
+        .insert([
+          {
+            type: newExam.type || '',
+            status: newExam.status || 'solicitado',
+            date: new Date().toISOString().split('T')[0],
+            results: newExam.results || ''
+          }
+        ]);
 
-  const addPrescription = () => {
+      if (error) {
+        alert('Erro ao salvar: ' + error.message);
+      } else {
+        fetchExams(); // Atualiza a lista na hora
+        setNewExam({ type: '', status: 'solicitado' });
+        alert('Exame salvo com sucesso!');
+      }
+    }
+};
+
+  const addPrescription = async () => {
     if (newPrescription.medication && newPrescription.dosage) {
-      setPrescriptions([...prescriptions, {
-        id: Date.now().toString(),
-        date: new Date().toISOString().split('T')[0],
-        ...newPrescription
-      }]);
-      setNewPrescription({ medication: '', dosage: '', frequency: '' });
+      const { error } = await supabase
+        .from('prescriptions')
+        .insert([
+          {
+            date: new Date().toISOString().split('T')[0],
+            medication: newPrescription.medication || '',
+            dosage: newPrescription.dosage || '',
+            frequency: newPrescription.frequency || ''
+          }
+        ]);
+
+      if (error) {
+        alert('Erro ao salvar prescrição!');
+        console.log(error);
+      } else {
+        fetchPrescriptions(); // Atualiza a lista
+        setNewPrescription({ medication: '', dosage: '', frequency: '' });
+        alert('Prescrição adicionada com sucesso!');
+      }
     }
   };
 
